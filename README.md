@@ -1,4 +1,4 @@
-# Skool Time Coordinator
+# Global Time Coordinator
 
 Una aplicación web de una sola página (SPA) ultra-simple y directa, diseñada para coordinar horarios entre miembros de comunidades (como Skool) que viven en distintos países. 
 
