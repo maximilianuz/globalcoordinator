@@ -30,13 +30,6 @@ An ultra-simple, zero-friction single-page web application (SPA) designed to sea
 - **Tailwind CSS** (Via CDN for instant utility styling)
 - **Luxon** (Precise timezone management)
 - **html-to-image** (For clipboard screenshots)
-
-## 📦 Quick Deployment
-Since the entire application lives in a single static `index.html` file, you can deploy it for free in seconds:
-1. **GitHub Pages:** Upload `index.html` to a repo and enable Pages.
-2. **Vercel / Netlify:** Drag and drop the folder containing `index.html` into your dashboard.
-*No `npm install` or build processes required!*
-
 ---
 
 <h1 id="español">🌍 Global Time Coordinator</h1>
@@ -63,9 +56,3 @@ Una aplicación web de una sola página (SPA) ultra-simple y directa, diseñada 
 - **Tailwind CSS** (Vía CDN para estilos utilitarios instantáneos)
 - **Luxon** (Gestión precisa de Zonas Horarias)
 - **html-to-image** (Para la captura de pantalla al portapapeles)
-
-## 📦 Despliegue Rápido
-Como toda la aplicación vive en un solo archivo `index.html` estático, puedes desplegarla de forma gratuita en segundos:
-1. **GitHub Pages:** Sube `index.html` a un repositorio y habilita Pages.
-2. **Vercel / Netlify:** Arrastra la carpeta que contiene el `index.html` a tu cuenta para obtener una URL al instante.
-*¡No requiere `npm install`, ni procesos de build!*
