@@ -26,11 +26,4 @@ Una aplicación web de una sola página (SPA) ultra-simple y directa, diseñada 
 - **html-to-image** (Para la captura de pantalla al portapapeles)
 - **Lucide Icons** (SVGs en línea para UI moderna)
 
-## 📦 Despliegue Rápido
-
-Como toda la aplicación vive en un solo archivo `index.html` estático, puedes desplegarla de forma gratuita en segundos:
-
-1. **GitHub Pages:** Sube `index.html` a un repositorio y habilita Pages.
-2. **Vercel / Netlify / Surge:** Arrastra la carpeta que contiene el `index.html` a tu cuenta de Vercel o Netlify para obtener una URL al instante.
-
 ¡No requiere `npm install`, ni procesos de build!
