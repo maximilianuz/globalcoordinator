@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Coordinator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#000000',
+                        cardbg: '#111214',
+                        bordercolor: '#26282c',
+                        borderhover: '#383a40',
+                        textmain: '#f3f4f6',
+                        textsec: '#8b949e',
+                        primary: '#ffffff',
+                    }
+                }
+            }
+        }
+    </script>
+    <script>
+        window.addEventListener('error', function(e) {
+            document.body.innerHTML = '<div style="background:#0b0c0e; color:#ff4444; padding: 20px; font-family:sans-serif; height:100vh;"><h2>JavaScript Error</h2><pre style="white-space:pre-wrap;">' + (e.error ? e.error.stack : e.message) + '</pre></div>';
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            document.body.innerHTML = '<div style="background:#0b0c0e; color:#ff4444; padding: 20px; font-family:sans-serif; height:100vh;"><h2>Promise Error</h2><pre style="white-space:pre-wrap;">' + (e.reason ? e.reason.stack : e.reason) + '</pre></div>';
+        });
+    </script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            background-color: #000000; 
+            color: #f3f4f6; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Premium Glow Card */
+        .glow-card {
+            position: relative;
+            border-radius: 12px;
+            background: #0a0a0a;
+            border: 1px solid #26282c;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .glow-card:hover {
+            border-color: #383a40;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+        }
+        .glow-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(
+                350px circle at var(--mouse-x, -1000px) var(--mouse-y, -1000px),
+                rgba(255, 255, 255, 0.04),
+                transparent 40%
+            );
+            pointer-events: none;
+            z-index: 0;
+            transition: opacity 0.3s ease;
+        }
+        .glow-card-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Ambient Background Orbs */
+        .bg-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.15;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .orb-1 { top: -20%; left: -10%; width: 50vw; height: 50vw; background: #3b82f6; }
+        .orb-2 { bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: #9333ea; }
+
+        /* Scrollbars */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #26282c; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #383a40; }
+
+        /* Forms */
+        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            filter: invert(0.8);
+            cursor: pointer;
+        }
+        
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react">
+        const { useState, useEffect, useMemo, useRef } = React;
+        const { DateTime } = luxon;
+
+        // --- i18n Translation System ---
+        const userLang = navigator.language || navigator.userLanguage || 'en';
+        const isEs = userLang.toLowerCase().startsWith('es');
+        
+        const displayNames = (() => {
+            try { return new Intl.DisplayNames([isEs ? 'es' : 'en'], { type: 'region' }); } 
+            catch(e) { return null; }
+        })();
+
+        const getCountryName = (code) => {
+            if (!displayNames || !code) return null;
+            try { return displayNames.of(code.toUpperCase()); } 
+            catch(e) { return null; }
+        };
+
+        const t = {
+            title: "Global Coordinator",
+            subtitle: isEs ? "Coordinación de horarios sin fricción. Sin logins ni base de datos." : "Frictionless time coordination. No logins, no database.",
+            createEvent: isEs ? "Configurar Evento" : "Create Event",
+            date: isEs ? "Fecha" : "Date",
+            time: isEs ? "Hora Local" : "Local Time",
+            yourTimezone: isEs ? "Tu Zona Horaria" : "Your Timezone",
+            generateLink: isEs ? "Generar Enlace Compartible" : "Generate Shareable Link",
+            editNew: isEs ? "Editar / Nuevo" : "Edit / New",
+            copyLink: isEs ? "Copiar Enlace" : "Copy Link",
+            copyCapture: isEs ? "Copiar para Skool" : "Copy for Skool",
+            originTime: isEs ? "Hora de Origen" : "Origin Time",
+            yourLocalTime: isEs ? "Tu Hora Local" : "Your Local Time",
+            equivalences: isEs ? "Equivalencias Globales" : "Global Equivalences",
+            addCountry: isEs ? "Añadir País" : "Add Country",
+            searchPlaceholder: isEs ? "Escribe un país o ciudad (ej: Madrid, Tokyo, Fiji)..." : "Type a country or city (e.g., Madrid, Tokyo, Fiji)...",
+            quickAccess: isEs ? "Acceso Rápido" : "Quick Access",
+            searchResults: isEs ? "Resultados de Búsqueda" : "Search Results",
+            noResults: isEs ? "No se encontraron resultados para" : "No results found for",
+            invalidDate: isEs ? "Fecha inválida" : "Invalid Date",
+            noEquivalences: isEs ? "No has añadido equivalencias.<br/>Agrega zonas horarias para armar tu captura." : "No equivalences added yet.<br/>Add timezones to build your capture.",
+            linkCopied: isEs ? "¡Enlace copiado al portapapeles!" : "Link copied to clipboard!",
+            imageCopied: isEs ? "¡Captura copiada! Lista para pegar en Skool (Ctrl+V)." : "Capture copied! Ready to paste into Skool (Ctrl+V).",
+            copyError: isEs ? "Error al copiar. Intenta usar la herramienta de recortes de tu sistema." : "Error copying. Try using your system's snipping tool.",
+            poweredBy: isEs ? "Desarrollado con React, Tailwind & Luxon." : "Powered by React, Tailwind & Luxon.",
+            esc: "ESC",
+            detected: isEs ? "📍 Detectada:" : "📍 Detected:",
+            madeWith: isEs ? "Hecho con" : "Made with"
+        };
+
+        // --- IANA to Country Code Exhaustive Map ---
+        const zoneToCode = {
+            "Pacific/Midway": "um", "Pacific/Pago_Pago": "as", "Pacific/Honolulu": "us", "America/Anchorage": "us",
+            "America/Los_Angeles": "us", "America/Tijuana": "mx", "America/Denver": "us", "America/Phoenix": "us",
+            "America/Mazatlan": "mx", "America/Chicago": "us", "America/Mexico_City": "mx", "America/Monterrey": "mx",
+            "America/Regina": "ca", "America/Guatemala": "gt", "America/El_Salvador": "sv", "America/Managua": "ni",
+            "America/Costa_Rica": "cr", "America/Tegucigalpa": "hn", "America/New_York": "us", "America/Bogota": "co",
+            "America/Lima": "pe", "America/Panama": "pa", "America/Havana": "cu", "America/Toronto": "ca",
+            "America/Caracas": "ve", "America/La_Paz": "bo", "America/Santo_Domingo": "do", "America/Puerto_Rico": "pr",
+            "America/Santiago": "cl", "America/Halifax": "ca", "America/St_Johns": "ca", "America/Buenos_Aires": "ar",
+            "America/Argentina/Buenos_Aires": "ar", "America/Sao_Paulo": "br", "America/Montevideo": "uy",
+            "America/Asuncion": "py", "Atlantic/South_Georgia": "gs", "Atlantic/Cape_Verde": "cv", "Atlantic/Azores": "pt",
+            "Europe/London": "gb", "Europe/Dublin": "ie", "Europe/Lisbon": "pt", "Atlantic/Canary": "es",
+            "Europe/Madrid": "es", "Europe/Paris": "fr", "Europe/Berlin": "de", "Europe/Rome": "it", "Europe/Amsterdam": "nl",
+            "Europe/Brussels": "be", "Europe/Vienna": "at", "Europe/Zurich": "ch", "Europe/Stockholm": "se",
+            "Europe/Oslo": "no", "Europe/Copenhagen": "dk", "Europe/Prague": "cz", "Europe/Budapest": "hu",
+            "Europe/Warsaw": "pl", "Europe/Belgrade": "rs", "Africa/Algiers": "dz", "Africa/Lagos": "ng",
+            "Africa/Kinshasa": "cd", "Africa/Johannesburg": "za", "Europe/Athens": "gr", "Europe/Bucharest": "ro",
+            "Europe/Helsinki": "fi", "Europe/Kiev": "ua", "Europe/Riga": "lv", "Europe/Sofia": "bg", "Europe/Tallinn": "ee",
+            "Europe/Vilnius": "lt", "Africa/Cairo": "eg", "Asia/Jerusalem": "il", "Asia/Beirut": "lb", "Asia/Amman": "jo",
+            "Asia/Damascus": "sy", "Africa/Harare": "zw", "Europe/Moscow": "ru", "Europe/Istanbul": "tr", "Asia/Riyadh": "sa",
+            "Asia/Baghdad": "iq", "Asia/Kuwait": "kw", "Africa/Nairobi": "ke", "Asia/Tehran": "ir", "Asia/Dubai": "ae",
+            "Asia/Muscat": "om", "Asia/Baku": "az", "Asia/Tbilisi": "ge", "Asia/Yerevan": "am", "Asia/Kabul": "af",
+            "Asia/Karachi": "pk", "Asia/Tashkent": "uz", "Asia/Kolkata": "in", "Asia/Colombo": "lk", "Asia/Kathmandu": "np",
+            "Asia/Dhaka": "bd", "Asia/Almaty": "kz", "Asia/Novosibirsk": "ru", "Asia/Rangoon": "mm", "Asia/Bangkok": "th",
+            "Asia/Jakarta": "id", "Asia/Ho_Chi_Minh": "vn", "Asia/Krasnoyarsk": "ru", "Asia/Shanghai": "cn",
+            "Asia/Hong_Kong": "hk", "Asia/Taipei": "tw", "Asia/Kuala_Lumpur": "my", "Asia/Singapore": "sg",
+            "Asia/Manila": "ph", "Australia/Perth": "au", "Asia/Irkutsk": "ru", "Asia/Tokyo": "jp", "Asia/Seoul": "kr",
+            "Asia/Pyongyang": "kp", "Asia/Yakutsk": "ru", "Australia/Darwin": "au", "Australia/Adelaide": "au",
+            "Australia/Sydney": "au", "Australia/Melbourne": "au", "Australia/Brisbane": "au", "Australia/Hobart": "au",
+            "Asia/Vladivostok": "ru", "Pacific/Guam": "gu", "Pacific/Port_Moresby": "pg", "Asia/Magadan": "ru",
+            "Pacific/Noumea": "nc", "Pacific/Fiji": "fj", "Asia/Kamchatka": "ru", "Pacific/Majuro": "mh",
+            "Pacific/Auckland": "nz", "Pacific/Tongatapu": "to", "Pacific/Apia": "ws", "Pacific/Funafuti": "tv",
+            "Asia/Thimphu": "bt", "Indian/Maldives": "mv", "Pacific/Chatham": "nz", "Pacific/Efate": "vu"
+        };
+
+        const formatDt = (dt) => dt.setLocale(isEs ? 'es' : 'en').toFormat(isEs ? "cccc, dd LLL yyyy • HH:mm" : "cccc, LLL dd, yyyy • HH:mm");
+
+        const copyImageToClipboard = async (elementId) => {
+            try {
+                const node = document.getElementById(elementId);
+                const blob = await window.htmlToImage.toBlob(node, {
+                    backgroundColor: '#0a0a0a',
+                    style: { margin: '0' },
+                    pixelRatio: 2,
+                    filter: (n) => {
+                        if (n && n.nodeType === 1 && n.hasAttribute && n.hasAttribute('data-html2canvas-ignore')) return false;
+                        return true;
+                    }
+                });
+                const item = new ClipboardItem({ 'image/png': blob });
+                await navigator.clipboard.write([item]);
+                alert(t.imageCopied);
+            } catch (err) {
+                console.error(err);
+                alert(t.copyError);
+            }
+        };
+
+        // --- Glow Card Component ---
+        function GlowCard({ children, className = "" }) {
+            const cardRef = useRef(null);
+            const handleMouseMove = (e) => {
+                if (!cardRef.current) return;
+                const rect = cardRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                cardRef.current.style.setProperty('--mouse-x', `${x}px`);
+                cardRef.current.style.setProperty('--mouse-y', `${y}px`);
+            };
+            return (
+                <div ref={cardRef} onMouseMove={handleMouseMove} className={`glow-card ${className}`}>
+                   <div className="glow-card-content h-full w-full">
+                       {children}
+                   </div>
+                </div>
+            );
+        }
+
+        // --- Command Palette ---
+        function CommandPalette({ isOpen, onClose, onSelect, selectedZone }) {
+            if (!isOpen) return null;
+            
+            const inputRef = useRef(null);
+            useEffect(() => {
+                if (isOpen) {
+                    setTimeout(() => inputRef.current?.focus(), 50);
+                }
+            }, [isOpen]);
+
+            const [search, setSearch] = useState('');
+
+            const suggested = [
+                { value: "America/New_York", code: "us" },
+                { value: "Europe/Madrid", code: "es" },
+                { value: "America/Mexico_City", code: "mx" },
+                { value: "America/Bogota", code: "co" },
+                { value: "America/Argentina/Buenos_Aires", code: "ar" },
+                { value: "America/Santiago", code: "cl" },
+                { value: "Europe/London", code: "gb" },
+                { value: "America/Lima", code: "pe" },
+            ];
+
+            const allIntlZones = useMemo(() => {
+                try {
+                    return typeof Intl !== 'undefined' && Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : [];
+                } catch(e) {
+                    return [];
+                }
+            }, []);
+
+            const filteredZones = useMemo(() => {
+                if (!search) return [];
+                const lowerSearch = search.toLowerCase();
+                
+                const results = [];
+                for (const z of allIntlZones) {
+                    const code = zoneToCode[z] || null;
+                    const countryName = getCountryName(code) || '';
+                    const cityName = z.split('/').pop().replace(/_/g, ' ');
+                    
+                    if (
+                        cityName.toLowerCase().includes(lowerSearch) || 
+                        z.toLowerCase().includes(lowerSearch) ||
+                        countryName.toLowerCase().includes(lowerSearch)
+                    ) {
+                        results.push({ 
+                            label: countryName ? `${countryName} (${cityName})` : cityName, 
+                            value: z, 
+                            code 
+                        });
+                    }
+                }
+                return results.slice(0, 50);
+            }, [search, allIntlZones]);
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 bg-black/60 backdrop-blur-md transition-opacity" onClick={onClose}>
+                    <div className="bg-cardbg border border-bordercolor w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center px-5 py-4 border-b border-bordercolor">
+                            <svg className="text-textsec mr-4" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            <input ref={inputRef} value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchPlaceholder} className="w-full bg-transparent text-textmain placeholder-textsec outline-none text-base font-medium" />
+                            <button onClick={onClose} className="text-textsec hover:text-textmain text-[10px] font-bold px-2 py-1 bg-[#1a1c20] hover:bg-[#26282c] rounded border border-[#26282c] transition-all cursor-pointer tracking-wider">{t.esc}</button>
+                        </div>
+                        
+                        <div className="max-h-[55vh] overflow-y-auto custom-scrollbar p-2">
+                            {!search ? (
+                                <div className="p-3">
+                                    <h3 className="text-[10px] font-bold text-textsec uppercase tracking-widest mb-4 px-1">{t.quickAccess}</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        {suggested.map(item => {
+                                            const name = getCountryName(item.code) || item.value.split('/')[1];
+                                            return (
+                                                <button key={item.value} onClick={() => onSelect(item.value)} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl hover:bg-[#1a1c20] border border-transparent hover:border-bordercolor transition-all duration-200 text-textmain cursor-pointer group w-full">
+                                                    <img src={`https://flagcdn.com/${item.code}.svg`} width="36" alt={item.code} className="rounded shadow-sm border border-white/5 group-hover:scale-105 transition-transform duration-200" />
+                                                    <span className="text-xs text-center font-medium group-hover:text-white">{name}</span>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-2">
+                                    <h3 className="text-[10px] font-bold text-textsec uppercase tracking-widest mb-3 px-2">{t.searchResults}</h3>
+                                    {filteredZones.length === 0 ? (
+                                        <p className="text-textsec text-sm text-center py-10">{t.noResults} "{search}"</p>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            {filteredZones.map(item => (
+                                                <button key={item.value} onClick={() => onSelect(item.value)} className={`w-full flex items-center justify-between p-3.5 rounded-xl hover:bg-[#1a1c20] transition-all duration-200 text-left text-sm cursor-pointer group ${selectedZone === item.value ? 'bg-[#1a1c20]' : ''}`}>
+                                                    <div className="flex items-center gap-4">
+                                                        {item.code ? (
+                                                            <img src={`https://flagcdn.com/${item.code}.svg`} width="24" alt={item.code} className="rounded-[2px] shadow-sm border border-white/5" />
+                                                        ) : (
+                                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#4a4d55]"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                                        )}
+                                                        <span className="font-semibold text-[#c9d1d9] group-hover:text-white transition-colors">{item.label}</span>
+                                                    </div>
+                                                    <span className="text-textsec text-[11px] font-mono opacity-60 group-hover:opacity-100 transition-opacity">{item.value}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function CreatorView({ initialTime, initialZone, onGenerate }) {
+            const defaultDt = initialTime && initialZone 
+                ? DateTime.fromISO(initialTime, { zone: initialZone }) 
+                : DateTime.local();
+            
+            const [date, setDate] = useState(defaultDt.isValid ? defaultDt.toFormat('yyyy-MM-dd') : DateTime.local().toFormat('yyyy-MM-dd'));
+            const [time, setTime] = useState(defaultDt.isValid ? defaultDt.toFormat('HH:mm') : DateTime.local().toFormat('HH:mm'));
+            const [timezone, setTimezone] = useState(initialZone || DateTime.local().zoneName);
+            const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const dt = DateTime.fromISO(`${date}T${time}`, { zone: timezone });
+                if (dt.isValid) {
+                    onGenerate(dt.toISO(), timezone);
+                } else {
+                    alert(t.invalidDate);
+                }
+            };
+
+            const safeTimezone = timezone || 'UTC';
+            const code = zoneToCode[safeTimezone] || null;
+            const cName = getCountryName(code) || '';
+            const cityName = safeTimezone.split('/').pop().replace(/_/g, ' ');
+            const label = cName ? `${cName} (${cityName})` : cityName;
+
+            return (
+                <div className="w-full max-w-md mx-auto animate-fade-in mt-10">
+                    <GlowCard className="p-8 md:p-10 shadow-2xl">
+                        <h2 className="text-2xl font-extrabold mb-8 text-white text-center tracking-tight">{t.createEvent}</h2>
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="grid grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.date}</label>
+                                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required 
+                                        className="w-full bg-[#050505] border border-bordercolor rounded-xl px-4 py-3 text-textmain focus:outline-none focus:border-[#4a4d55] transition-colors cursor-pointer text-sm font-semibold shadow-inner" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.time}</label>
+                                    <input type="time" value={time} onChange={e => setTime(e.target.value)} required 
+                                        className="w-full bg-[#050505] border border-bordercolor rounded-xl px-4 py-3 text-textmain focus:outline-none focus:border-[#4a4d55] transition-colors cursor-pointer text-sm font-semibold shadow-inner" />
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.yourTimezone}</label>
+                                <button type="button" onClick={() => setIsZoneModalOpen(true)} className="w-full bg-[#050505] border border-bordercolor hover:border-[#4a4d55] rounded-xl px-4 py-3.5 text-textmain flex justify-between items-center transition-all duration-200 cursor-pointer shadow-inner group">
+                                    <div className="flex items-center gap-3">
+                                        {code ? (
+                                            <img src={`https://flagcdn.com/${code}.svg`} width="22" alt={code} className="rounded-[2px] border border-white/10" />
+                                        ) : (
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#4a4d55]"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                        )}
+                                        <span className="font-semibold text-sm group-hover:text-white transition-colors truncate text-[#c9d1d9]">{label}</span>
+                                    </div>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-textsec group-hover:text-textmain transition-colors"><path d="m6 9 6 6 6-6"/></svg>
+                                </button>
+                            </div>
+
+                            <button type="submit" 
+                                className="w-full bg-primary hover:bg-gray-200 text-black font-bold py-3.5 px-4 rounded-xl transition-all duration-200 cursor-pointer mt-8 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)] text-sm hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                {t.generateLink}
+                            </button>
+                        </form>
+                        
+                        <CommandPalette 
+                            isOpen={isZoneModalOpen} 
+                            onClose={() => setIsZoneModalOpen(false)} 
+                            onSelect={(val) => { setTimezone(val); setIsZoneModalOpen(false); }}
+                            selectedZone={timezone}
+                        />
+                    </GlowCard>
+                </div>
+            );
+        }
+
+        function GuestView({ time, zone, onEdit }) {
+            const originalDt = DateTime.fromISO(time, { zone });
+            const localZone = DateTime.local().zoneName;
+            const localDt = originalDt.setZone(localZone);
+            
+            const [selectedZones, setSelectedZones] = useState([]);
+            const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+
+            const addZone = (z) => {
+                if (z && !selectedZones.includes(z)) {
+                    setSelectedZones([...selectedZones, z]);
+                }
+                setIsZoneModalOpen(false);
+            };
+
+            const removeZone = (z) => {
+                setSelectedZones(selectedZones.filter(sz => sz !== z));
+            };
+
+            const copyLink = () => {
+                navigator.clipboard.writeText(window.location.href);
+                alert(t.linkCopied);
+            };
+
+            return (
+                <div className="space-y-8 max-w-5xl mx-auto w-full animate-fade-in mt-6">
+                    {/* Toolbar */}
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <button onClick={onEdit} className="text-sm text-textsec hover:text-textmain flex items-center gap-2 transition-colors duration-200 cursor-pointer font-medium px-2">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                            {t.editNew}
+                        </button>
+                        <div className="flex flex-wrap justify-center gap-3">
+                            <button onClick={copyLink} className="bg-cardbg border border-bordercolor hover:border-borderhover text-textmain text-sm font-semibold py-2.5 px-5 rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-sm">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                {t.copyLink}
+                            </button>
+                            <button onClick={() => copyImageToClipboard('capture-area')} className="bg-primary hover:bg-gray-200 text-black text-sm font-bold py-2.5 px-5 rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                                {t.copyCapture}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Capture Area */}
+                    <GlowCard className="shadow-2xl">
+                        <div id="capture-area" className="p-8 md:p-12 relative bg-[#0a0a0a]">
+                            {/* Headers */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                                <div className="text-center md:text-left flex flex-col justify-center">
+                                    <h2 className="text-textsec text-[10px] font-bold uppercase tracking-widest mb-3 flex items-center justify-center md:justify-start gap-2.5">
+                                        {zoneToCode[zone] && <img src={`https://flagcdn.com/${zoneToCode[zone]}.svg`} width="18" alt="flag" className="rounded-[2px] border border-white/10 shadow-sm" />}
+                                        {t.originTime} ({zone.split('/').pop().replace(/_/g, ' ')})
+                                    </h2>
+                                    <p className="text-2xl md:text-3xl font-semibold text-textmain capitalize tracking-tight">
+                                        {originalDt.isValid ? formatDt(originalDt) : t.invalidDate}
+                                    </p>
+                                </div>
+
+                                <div className="bg-[#111214] border border-bordercolor rounded-2xl p-7 text-center shadow-inner relative transition-all duration-200">
+                                    <h3 className="text-textmain text-[10px] font-bold uppercase tracking-widest mb-3 flex items-center justify-center gap-2.5">
+                                        {zoneToCode[localZone] && <img src={`https://flagcdn.com/${zoneToCode[localZone]}.svg`} width="18" alt="flag" className="rounded-[2px] border border-white/10 shadow-sm" />}
+                                        {t.yourLocalTime} ({localZone.split('/').pop().replace(/_/g, ' ')})
+                                    </h3>
+                                    <p className="text-5xl md:text-6xl font-black text-white mb-2 tracking-tighter">
+                                        {localDt.isValid ? localDt.toFormat("HH:mm") : '--:--'}
+                                    </p>
+                                    <p className="text-textsec text-sm font-semibold capitalize">
+                                        {localDt.isValid ? localDt.setLocale(isEs ? 'es' : 'en').toFormat("cccc, dd LLL yyyy") : '--'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="w-full h-px bg-gradient-to-r from-transparent via-[#26282c] to-transparent mb-10"></div>
+
+                            {/* Multi-country Grid */}
+                            <div>
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4" data-html2canvas-ignore="true">
+                                    <h3 className="text-xs font-bold text-textmain uppercase tracking-widest">
+                                        {t.equivalences}
+                                    </h3>
+                                    <button onClick={() => setIsZoneModalOpen(true)} className="bg-[#1a1c20] border border-[#26282c] hover:border-[#383a40] text-textmain text-sm font-semibold py-2 px-4 rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-sm">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                        {t.addCountry}
+                                    </button>
+                                </div>
+                                
+                                {selectedZones.length === 0 ? (
+                                    <div className="text-[#4a4d55] text-sm text-center py-12 border border-dashed border-[#26282c] rounded-2xl bg-[#111214]/50 font-medium" dangerouslySetInnerHTML={{__html: t.noEquivalences}}>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {selectedZones.map(z => {
+                                            const dt = originalDt.setZone(z);
+                                            const code = zoneToCode[z];
+                                            const cityName = z.split('/').pop().replace(/_/g, ' ');
+                                            const cName = getCountryName(code);
+                                            
+                                            return (
+                                                <div key={z} className="bg-[#111214] rounded-2xl p-5 border border-bordercolor relative group cursor-default shadow-sm flex flex-col justify-between transition-colors hover:bg-[#151619] hover:border-[#383a40]">
+                                                    <button onClick={() => removeZone(z)} 
+                                                        className="absolute top-3 right-3 p-1.5 text-[#4a4d55] hover:text-red-400 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer" 
+                                                        title="Remove" data-html2canvas-ignore="true">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                                    </button>
+                                                    <div className="flex items-center gap-2.5 mb-4 pr-6">
+                                                        {code ? (
+                                                            <img src={`https://flagcdn.com/${code}.svg`} width="20" alt={code} className="rounded-[2px] shadow-sm border border-white/10" />
+                                                        ) : (
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#4a4d55]"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                                        )}
+                                                        <div className="flex flex-col min-w-0">
+                                                            <p className="text-[#c9d1d9] text-[11px] font-bold truncate uppercase tracking-widest leading-none mb-1">{cName || cityName}</p>
+                                                            {cName && <p className="text-textsec text-[9px] font-medium truncate uppercase tracking-widest leading-none">{cityName}</p>}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-3xl font-black text-white mb-1 tracking-tighter">{dt.isValid ? dt.toFormat("HH:mm") : '--:--'}</p>
+                                                        <p className="text-textsec text-xs font-semibold capitalize">{dt.isValid ? dt.setLocale(isEs ? 'es' : 'en').toFormat("dd LLL") : '--'}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Branding */}
+                            <div className="absolute bottom-5 right-7 opacity-20 text-[9px] text-[#f3f4f6] font-black tracking-widest uppercase flex items-center gap-1.5">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                Global Coordinator
+                            </div>
+                        </div>
+                    </GlowCard>
+
+                    <CommandPalette 
+                        isOpen={isZoneModalOpen} 
+                        onClose={() => setIsZoneModalOpen(false)} 
+                        onSelect={addZone}
+                        selectedZone={null}
+                    />
+                </div>
+            );
+        }
+
+        function App() {
+            const [urlParams, setUrlParams] = useState(new URLSearchParams(window.location.search));
+            const [isEditing, setIsEditing] = useState(!urlParams.get('time'));
+
+            const timeParam = urlParams.get('time');
+            const zoneParam = urlParams.get('zone');
+
+            useEffect(() => {
+                const handlePopState = () => {
+                    const params = new URLSearchParams(window.location.search);
+                    setUrlParams(params);
+                    setIsEditing(!params.get('time'));
+                };
+                window.addEventListener('popstate', handlePopState);
+                return () => window.removeEventListener('popstate', handlePopState);
+            }, []);
+
+            const handleUpdateUrl = (time, zone) => {
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.set('time', time);
+                newUrl.searchParams.set('zone', zone);
+                window.history.pushState({}, '', newUrl);
+                setUrlParams(newUrl.searchParams);
+                setIsEditing(false);
+            };
+
+            const handleEdit = () => {
+                setIsEditing(true);
+            };
+
+            return (
+                <div className="min-h-screen p-4 md:p-8 flex flex-col items-center selection:bg-[#26282c] selection:text-white relative z-10">
+                    <header className="mb-4 mt-6 text-center animate-fade-in">
+                        <div className="inline-flex items-center justify-center p-2.5 bg-[#111214] border border-bordercolor rounded-2xl mb-4 shadow-sm">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f3f4f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                        </div>
+                        <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter mb-3">
+                            {t.title}
+                        </h1>
+                        <p className="text-textsec font-medium text-sm md:text-base max-w-sm mx-auto leading-relaxed">{t.subtitle}</p>
+                    </header>
+
+                    <main className="w-full flex-1 flex flex-col">
+                        {!isEditing && timeParam && zoneParam ? (
+                            <GuestView time={timeParam} zone={zoneParam} onEdit={handleEdit} />
+                        ) : (
+                            <CreatorView initialTime={timeParam} initialZone={zoneParam} onGenerate={handleUpdateUrl} />
+                        )}
+                    </main>
+                    
+                    <footer className="mt-16 text-center pb-8 animate-fade-in flex flex-col gap-3 items-center">
+                        <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-textsec opacity-90 hover:opacity-100 transition-opacity">
+                            <span>{t.madeWith}</span>
+                            <span className="text-red-500 animate-pulse text-[15px]">🫶</span>
+                            <span>by:</span>
+                            <a href="https://maximilianoc.netlify.app/" target="_blank" rel="noopener noreferrer" className="text-[#f3f4f6] hover:text-white transition-colors underline decoration-white/20 hover:decoration-white/50 underline-offset-4">
+                                Maximiliano C.
+                            </a>
+                        </div>
+                        <div className="text-[9px] font-semibold text-[#4a4d55] uppercase tracking-widest">
+                            {t.poweredBy}
+                        </div>
+                        <a href="https://github.com/maximilianuz/globalcoordinator" target="_blank" rel="noopener noreferrer" className="mt-1 flex items-center justify-center gap-2 bg-[#16171a] hover:bg-[#1a1c20] border border-[#26282c] hover:border-[#383a40] text-textmain text-[11px] font-semibold py-1.5 px-3 rounded-lg transition-all duration-200 shadow-sm">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                            {isEs ? "Dale una ⭐ en GitHub" : "Star on GitHub"}
+                        </a>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
