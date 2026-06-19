@@ -161,7 +161,11 @@
             poweredBy: isEs ? "Desarrollado con React, Tailwind & Luxon." : "Powered by React, Tailwind & Luxon.",
             esc: "ESC",
             detected: isEs ? "📍 Detectada:" : "📍 Detected:",
-            madeWith: isEs ? "Hecho con" : "Made with"
+            madeWith: isEs ? "Hecho con" : "Made with",
+            addSchedule: isEs ? "+ Añadir Opción" : "+ Add Option",
+            remove: isEs ? "Eliminar" : "Remove",
+            option: isEs ? "Opción" : "Option",
+            options: isEs ? "Opciones" : "Options"
         };
 
         // --- IANA to Country Code Exhaustive Map ---
@@ -355,23 +359,58 @@
             );
         }
 
-        function CreatorView({ initialTime, initialZone, onGenerate }) {
-            const defaultDt = initialTime && initialZone 
-                ? DateTime.fromISO(initialTime, { zone: initialZone }) 
-                : DateTime.local();
-            
-            const [date, setDate] = useState(defaultDt.isValid ? defaultDt.toFormat('yyyy-MM-dd') : DateTime.local().toFormat('yyyy-MM-dd'));
-            const [time, setTime] = useState(defaultDt.isValid ? defaultDt.toFormat('HH:mm') : DateTime.local().toFormat('HH:mm'));
+        function CreatorView({ initialTimes, initialZone, onGenerate }) {
+            const [schedules, setSchedules] = useState(() => {
+                if (initialTimes && initialTimes.length > 0) {
+                    return initialTimes.map((iso, i) => {
+                        const dt = DateTime.fromISO(iso, { zone: initialZone || DateTime.local().zoneName });
+                        return {
+                            id: i,
+                            date: dt.isValid ? dt.toFormat('yyyy-MM-dd') : DateTime.local().toFormat('yyyy-MM-dd'),
+                            time: dt.isValid ? dt.toFormat('HH:mm') : DateTime.local().toFormat('HH:mm')
+                        };
+                    });
+                } else {
+                    return [{
+                        id: 0,
+                        date: DateTime.local().toFormat('yyyy-MM-dd'),
+                        time: DateTime.local().toFormat('HH:mm')
+                    }];
+                }
+            });
+
             const [timezone, setTimezone] = useState(initialZone || DateTime.local().zoneName);
             const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
 
+            const handleAddSchedule = () => {
+                const last = schedules[schedules.length - 1];
+                setSchedules([...schedules, { id: Date.now(), date: last.date, time: last.time }]);
+            };
+
+            const handleRemoveSchedule = (id) => {
+                if (schedules.length > 1) {
+                    setSchedules(schedules.filter(s => s.id !== id));
+                }
+            };
+
+            const updateSchedule = (id, field, value) => {
+                setSchedules(schedules.map(s => s.id === id ? { ...s, [field]: value } : s));
+            };
+
             const handleSubmit = (e) => {
                 e.preventDefault();
-                const dt = DateTime.fromISO(`${date}T${time}`, { zone: timezone });
-                if (dt.isValid) {
-                    onGenerate(dt.toISO(), timezone);
-                } else {
-                    alert(t.invalidDate);
+                const validTimes = [];
+                for (const s of schedules) {
+                    const dt = DateTime.fromISO(`${s.date}T${s.time}`, { zone: timezone });
+                    if (dt.isValid) {
+                        validTimes.push(dt.toISO());
+                    } else {
+                        alert(t.invalidDate);
+                        return;
+                    }
+                }
+                if (validTimes.length > 0) {
+                    onGenerate(validTimes, timezone);
                 }
             };
 
@@ -386,20 +425,37 @@
                     <GlowCard className="p-8 md:p-10 shadow-2xl">
                         <h2 className="text-2xl font-extrabold mb-8 text-white text-center tracking-tight">{t.createEvent}</h2>
                         <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="grid grid-cols-2 gap-5">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.date}</label>
-                                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required 
-                                        className="w-full bg-[#050505] border border-bordercolor rounded-xl px-4 py-3 text-textmain focus:outline-none focus:border-[#4a4d55] transition-colors cursor-pointer text-sm font-semibold shadow-inner" />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.time}</label>
-                                    <input type="time" value={time} onChange={e => setTime(e.target.value)} required 
-                                        className="w-full bg-[#050505] border border-bordercolor rounded-xl px-4 py-3 text-textmain focus:outline-none focus:border-[#4a4d55] transition-colors cursor-pointer text-sm font-semibold shadow-inner" />
-                                </div>
-                            </div>
                             
-                            <div>
+                            <div className="space-y-4">
+                                {schedules.map((s, index) => (
+                                    <div key={s.id} className="relative bg-[#111214] p-4 rounded-xl border border-bordercolor">
+                                        {schedules.length > 1 && (
+                                            <button type="button" onClick={() => handleRemoveSchedule(s.id)} 
+                                                className="absolute -top-2 -right-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 p-1.5 rounded-full border border-red-500/20 transition-colors" title={t.remove}>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                            </button>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.date} {schedules.length > 1 ? index + 1 : ''}</label>
+                                                <input type="date" value={s.date} onChange={e => updateSchedule(s.id, 'date', e.target.value)} required 
+                                                    className="w-full bg-[#050505] border border-bordercolor rounded-lg px-3 py-2 text-textmain focus:outline-none focus:border-[#4a4d55] transition-colors cursor-pointer text-sm font-semibold shadow-inner" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.time} {schedules.length > 1 ? index + 1 : ''}</label>
+                                                <input type="time" value={s.time} onChange={e => updateSchedule(s.id, 'time', e.target.value)} required 
+                                                    className="w-full bg-[#050505] border border-bordercolor rounded-lg px-3 py-2 text-textmain focus:outline-none focus:border-[#4a4d55] transition-colors cursor-pointer text-sm font-semibold shadow-inner" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button type="button" onClick={handleAddSchedule} className="w-full border border-dashed border-[#383a40] hover:border-[#4a4d55] hover:bg-[#111214] text-textsec hover:text-textmain text-xs font-bold py-3 rounded-xl transition-all duration-200 cursor-pointer">
+                                {t.addSchedule}
+                            </button>
+                            
+                            <div className="pt-2">
                                 <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.yourTimezone}</label>
                                 <button type="button" onClick={() => setIsZoneModalOpen(true)} className="w-full bg-[#050505] border border-bordercolor hover:border-[#4a4d55] rounded-xl px-4 py-3.5 text-textmain flex justify-between items-center transition-all duration-200 cursor-pointer shadow-inner group">
                                     <div className="flex items-center gap-3">
@@ -432,10 +488,11 @@
             );
         }
 
-        function GuestView({ time, zone, onEdit }) {
-            const originalDt = DateTime.fromISO(time, { zone });
+        function GuestView({ times, zone, onEdit }) {
+            const isSingle = times.length === 1;
+            const originalDts = times.map(time => DateTime.fromISO(time, { zone }));
             const localZone = DateTime.local().zoneName;
-            const localDt = originalDt.setZone(localZone);
+            const localDts = originalDts.map(dt => dt.setZone(localZone));
             
             const [selectedZones, setSelectedZones] = useState([]);
             const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
@@ -454,6 +511,21 @@
             const copyLink = () => {
                 navigator.clipboard.writeText(window.location.href);
                 alert(t.linkCopied);
+            };
+
+            const getZoneHeader = (z) => {
+                const code = zoneToCode[z];
+                const cityName = z.split('/').pop().replace(/_/g, ' ');
+                const cName = getCountryName(code);
+                return (
+                    <div className="flex items-center gap-2">
+                        {code && <img src={`https://flagcdn.com/${code}.svg`} width="18" alt="flag" className="rounded-[2px] shadow-sm" />}
+                        <div className="flex flex-col text-left">
+                            <span className="text-[11px] font-bold uppercase tracking-widest text-[#c9d1d9] leading-none mb-0.5">{cName || cityName}</span>
+                            {cName && <span className="text-[9px] font-medium text-textsec leading-none">{cityName}</span>}
+                        </div>
+                    </div>
+                );
             };
 
             return (
@@ -479,89 +551,157 @@
                     {/* Capture Area */}
                     <GlowCard className="shadow-2xl">
                         <div id="capture-area" className="p-8 md:p-12 relative bg-[#0a0a0a]">
-                            {/* Headers */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                                <div className="text-center md:text-left flex flex-col justify-center">
-                                    <h2 className="text-textsec text-[10px] font-bold uppercase tracking-widest mb-3 flex items-center justify-center md:justify-start gap-2.5">
-                                        {zoneToCode[zone] && <img src={`https://flagcdn.com/${zoneToCode[zone]}.svg`} width="18" alt="flag" className="rounded-[2px] border border-white/10 shadow-sm" />}
-                                        {t.originTime} ({zone.split('/').pop().replace(/_/g, ' ')})
-                                    </h2>
-                                    <p className="text-2xl md:text-3xl font-semibold text-textmain capitalize tracking-tight">
-                                        {originalDt.isValid ? formatDt(originalDt) : t.invalidDate}
-                                    </p>
-                                </div>
+                            
+                            {isSingle ? (
+                                <>
+                                    {/* Single Time Header */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                                        <div className="text-center md:text-left flex flex-col justify-center">
+                                            <h2 className="text-textsec text-[10px] font-bold uppercase tracking-widest mb-3 flex items-center justify-center md:justify-start gap-2.5">
+                                                {zoneToCode[zone] && <img src={`https://flagcdn.com/${zoneToCode[zone]}.svg`} width="18" alt="flag" className="rounded-[2px] border border-white/10 shadow-sm" />}
+                                                {t.originTime} ({zone.split('/').pop().replace(/_/g, ' ')})
+                                            </h2>
+                                            <p className="text-2xl md:text-3xl font-semibold text-textmain capitalize tracking-tight">
+                                                {originalDts[0].isValid ? formatDt(originalDts[0]) : t.invalidDate}
+                                            </p>
+                                        </div>
 
-                                <div className="bg-[#111214] border border-bordercolor rounded-2xl p-7 text-center shadow-inner relative transition-all duration-200">
-                                    <h3 className="text-textmain text-[10px] font-bold uppercase tracking-widest mb-3 flex items-center justify-center gap-2.5">
-                                        {zoneToCode[localZone] && <img src={`https://flagcdn.com/${zoneToCode[localZone]}.svg`} width="18" alt="flag" className="rounded-[2px] border border-white/10 shadow-sm" />}
-                                        {t.yourLocalTime} ({localZone.split('/').pop().replace(/_/g, ' ')})
-                                    </h3>
-                                    <p className="text-5xl md:text-6xl font-black text-white mb-2 tracking-tighter">
-                                        {localDt.isValid ? localDt.toFormat("HH:mm") : '--:--'}
-                                    </p>
-                                    <p className="text-textsec text-sm font-semibold capitalize">
-                                        {localDt.isValid ? localDt.setLocale(isEs ? 'es' : 'en').toFormat("cccc, dd LLL yyyy") : '--'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Divider */}
-                            <div className="w-full h-px bg-gradient-to-r from-transparent via-[#26282c] to-transparent mb-10"></div>
-
-                            {/* Multi-country Grid */}
-                            <div>
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4" data-html2canvas-ignore="true">
-                                    <h3 className="text-xs font-bold text-textmain uppercase tracking-widest">
-                                        {t.equivalences}
-                                    </h3>
-                                    <button onClick={() => setIsZoneModalOpen(true)} className="bg-[#1a1c20] border border-[#26282c] hover:border-[#383a40] text-textmain text-sm font-semibold py-2 px-4 rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-sm">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                        {t.addCountry}
-                                    </button>
-                                </div>
-                                
-                                {selectedZones.length === 0 ? (
-                                    <div className="text-[#4a4d55] text-sm text-center py-12 border border-dashed border-[#26282c] rounded-2xl bg-[#111214]/50 font-medium" dangerouslySetInnerHTML={{__html: t.noEquivalences}}>
+                                        <div className="bg-[#111214] border border-bordercolor rounded-2xl p-7 text-center shadow-inner relative transition-all duration-200">
+                                            <h3 className="text-textmain text-[10px] font-bold uppercase tracking-widest mb-3 flex items-center justify-center gap-2.5">
+                                                {zoneToCode[localZone] && <img src={`https://flagcdn.com/${zoneToCode[localZone]}.svg`} width="18" alt="flag" className="rounded-[2px] border border-white/10 shadow-sm" />}
+                                                {t.yourLocalTime} ({localZone.split('/').pop().replace(/_/g, ' ')})
+                                            </h3>
+                                            <p className="text-5xl md:text-6xl font-black text-white mb-2 tracking-tighter">
+                                                {localDts[0].isValid ? localDts[0].toFormat("HH:mm") : '--:--'}
+                                            </p>
+                                            <p className="text-textsec text-sm font-semibold capitalize">
+                                                {localDts[0].isValid ? localDts[0].setLocale(isEs ? 'es' : 'en').toFormat("cccc, dd LLL yyyy") : '--'}
+                                            </p>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                        {selectedZones.map(z => {
-                                            const dt = originalDt.setZone(z);
-                                            const code = zoneToCode[z];
-                                            const cityName = z.split('/').pop().replace(/_/g, ' ');
-                                            const cName = getCountryName(code);
-                                            
-                                            return (
-                                                <div key={z} className="bg-[#111214] rounded-2xl p-5 border border-bordercolor relative group cursor-default shadow-sm flex flex-col justify-between transition-colors hover:bg-[#151619] hover:border-[#383a40]">
-                                                    <button onClick={() => removeZone(z)} 
-                                                        className="absolute top-3 right-3 p-1.5 text-[#4a4d55] hover:text-red-400 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer" 
-                                                        title="Remove" data-html2canvas-ignore="true">
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                                                    </button>
-                                                    <div className="flex items-center gap-2.5 mb-4 pr-6">
-                                                        {code ? (
-                                                            <img src={`https://flagcdn.com/${code}.svg`} width="20" alt={code} className="rounded-[2px] shadow-sm border border-white/10" />
-                                                        ) : (
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#4a4d55]"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                                                        )}
-                                                        <div className="flex flex-col min-w-0">
-                                                            <p className="text-[#c9d1d9] text-[11px] font-bold truncate uppercase tracking-widest leading-none mb-1">{cName || cityName}</p>
-                                                            {cName && <p className="text-textsec text-[9px] font-medium truncate uppercase tracking-widest leading-none">{cityName}</p>}
+
+                                    {/* Divider */}
+                                    <div className="w-full h-px bg-gradient-to-r from-transparent via-[#26282c] to-transparent mb-10"></div>
+
+                                    {/* Single Time Equivalences */}
+                                    <div>
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4" data-html2canvas-ignore="true">
+                                            <h3 className="text-xs font-bold text-textmain uppercase tracking-widest">
+                                                {t.equivalences}
+                                            </h3>
+                                            <button onClick={() => setIsZoneModalOpen(true)} className="bg-[#1a1c20] border border-[#26282c] hover:border-[#383a40] text-textmain text-sm font-semibold py-2 px-4 rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-sm">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                                {t.addCountry}
+                                            </button>
+                                        </div>
+                                        
+                                        {selectedZones.length === 0 ? (
+                                            <div className="text-[#4a4d55] text-sm text-center py-12 border border-dashed border-[#26282c] rounded-2xl bg-[#111214]/50 font-medium" dangerouslySetInnerHTML={{__html: t.noEquivalences}}>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                {selectedZones.map(z => {
+                                                    const dt = originalDts[0].setZone(z);
+                                                    const code = zoneToCode[z];
+                                                    const cityName = z.split('/').pop().replace(/_/g, ' ');
+                                                    const cName = getCountryName(code);
+                                                    
+                                                    return (
+                                                        <div key={z} className="bg-[#111214] rounded-2xl p-5 border border-bordercolor relative group cursor-default shadow-sm flex flex-col justify-between transition-colors hover:bg-[#151619] hover:border-[#383a40]">
+                                                            <button onClick={() => removeZone(z)} 
+                                                                className="absolute top-3 right-3 p-1.5 text-[#4a4d55] hover:text-red-400 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer" 
+                                                                title="Remove" data-html2canvas-ignore="true">
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                                            </button>
+                                                            <div className="flex items-center gap-2.5 mb-4 pr-6">
+                                                                {code ? (
+                                                                    <img src={`https://flagcdn.com/${code}.svg`} width="20" alt={code} className="rounded-[2px] shadow-sm border border-white/10" />
+                                                                ) : (
+                                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#4a4d55]"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                                                )}
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <p className="text-[#c9d1d9] text-[11px] font-bold truncate uppercase tracking-widest leading-none mb-1">{cName || cityName}</p>
+                                                                    {cName && <p className="text-textsec text-[9px] font-medium truncate uppercase tracking-widest leading-none">{cityName}</p>}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-3xl font-black text-white mb-1 tracking-tighter">{dt.isValid ? dt.toFormat("HH:mm") : '--:--'}</p>
+                                                                <p className="text-textsec text-xs font-semibold capitalize">{dt.isValid ? dt.setLocale(isEs ? 'es' : 'en').toFormat("dd LLL") : '--'}</p>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-3xl font-black text-white mb-1 tracking-tighter">{dt.isValid ? dt.toFormat("HH:mm") : '--:--'}</p>
-                                                        <p className="text-textsec text-xs font-semibold capitalize">{dt.isValid ? dt.setLocale(isEs ? 'es' : 'en').toFormat("dd LLL") : '--'}</p>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* Multiple Times Grid */}
+                                    <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" data-html2canvas-ignore="true">
+                                        <h2 className="text-xs font-bold text-textmain uppercase tracking-widest">{t.options}</h2>
+                                        <button onClick={() => setIsZoneModalOpen(true)} className="bg-[#1a1c20] border border-[#26282c] hover:border-[#383a40] text-textmain text-sm font-semibold py-2 px-4 rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-sm">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                            {t.addCountry}
+                                        </button>
+                                    </div>
+                                    <div className="overflow-x-auto custom-scrollbar pb-4 rounded-xl border border-bordercolor">
+                                        <table className="w-full text-left border-collapse min-w-[600px]">
+                                            <thead>
+                                                <tr className="bg-[#111214] border-b border-bordercolor">
+                                                    <th className="p-4 font-bold text-textsec uppercase tracking-widest text-[10px] w-16">{t.option}</th>
+                                                    <th className="p-4 border-l border-bordercolor bg-[#16171a]/50">
+                                                        <div className="text-[10px] text-textsec uppercase tracking-widest mb-2 font-bold">{t.originTime}</div>
+                                                        {getZoneHeader(zone)}
+                                                    </th>
+                                                    <th className="p-4 border-l border-bordercolor bg-[#16171a]">
+                                                        <div className="text-[10px] text-primary uppercase tracking-widest mb-2 font-bold">{t.yourLocalTime}</div>
+                                                        {getZoneHeader(localZone)}
+                                                    </th>
+                                                    {selectedZones.map(z => (
+                                                        <th key={z} className="p-4 border-l border-bordercolor relative group">
+                                                            <button onClick={() => removeZone(z)} 
+                                                                className="absolute top-2 right-2 p-1 text-[#4a4d55] hover:text-red-400 hover:bg-red-400/10 rounded opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer" 
+                                                                title="Remove" data-html2canvas-ignore="true">
+                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                            </button>
+                                                            <div className="text-[10px] text-textsec uppercase tracking-widest mb-2 font-bold">&nbsp;</div>
+                                                            {getZoneHeader(z)}
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {originalDts.map((dt, idx) => (
+                                                    <tr key={idx} className="border-b border-bordercolor/50 hover:bg-[#111214] transition-colors">
+                                                        <td className="p-4 text-center font-black text-textsec text-lg">#{idx + 1}</td>
+                                                        <td className="p-4 border-l border-bordercolor bg-[#16171a]/20">
+                                                            <p className="text-xl font-bold text-white mb-1">{dt.isValid ? dt.toFormat("HH:mm") : '--:--'}</p>
+                                                            <p className="text-xs text-textsec font-medium capitalize">{dt.isValid ? dt.setLocale(isEs ? 'es' : 'en').toFormat("dd LLL") : '--'}</p>
+                                                        </td>
+                                                        <td className="p-4 border-l border-bordercolor bg-[#16171a]/50">
+                                                            <p className="text-2xl font-black text-primary mb-1">{localDts[idx].isValid ? localDts[idx].toFormat("HH:mm") : '--:--'}</p>
+                                                            <p className="text-xs text-primary/70 font-bold capitalize">{localDts[idx].isValid ? localDts[idx].setLocale(isEs ? 'es' : 'en').toFormat("dd LLL") : '--'}</p>
+                                                        </td>
+                                                        {selectedZones.map(z => {
+                                                            const zDt = dt.setZone(z);
+                                                            return (
+                                                                <td key={z} className="p-4 border-l border-bordercolor">
+                                                                    <p className="text-xl font-bold text-white mb-1">{zDt.isValid ? zDt.toFormat("HH:mm") : '--:--'}</p>
+                                                                    <p className="text-xs text-textsec font-medium capitalize">{zDt.isValid ? zDt.setLocale(isEs ? 'es' : 'en').toFormat("dd LLL") : '--'}</p>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
+                            )}
                             
                             {/* Branding */}
-                            <div className="absolute bottom-5 right-7 opacity-20 text-[9px] text-[#f3f4f6] font-black tracking-widest uppercase flex items-center gap-1.5">
+                            <div className="absolute bottom-5 right-7 opacity-20 text-[9px] text-[#f3f4f6] font-black tracking-widest uppercase flex items-center gap-1.5 pointer-events-none mt-8">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                                 Global Time Coordinator
                             </div>
@@ -580,24 +720,28 @@
 
         function App() {
             const [urlParams, setUrlParams] = useState(new URLSearchParams(window.location.search));
-            const [isEditing, setIsEditing] = useState(!urlParams.get('time'));
-
+            
+            const timesParam = urlParams.get('times');
             const timeParam = urlParams.get('time');
             const zoneParam = urlParams.get('zone');
+
+            const hasTimes = !!(timesParam || timeParam);
+            const [isEditing, setIsEditing] = useState(!hasTimes);
 
             useEffect(() => {
                 const handlePopState = () => {
                     const params = new URLSearchParams(window.location.search);
                     setUrlParams(params);
-                    setIsEditing(!params.get('time'));
+                    setIsEditing(!(params.get('times') || params.get('time')));
                 };
                 window.addEventListener('popstate', handlePopState);
                 return () => window.removeEventListener('popstate', handlePopState);
             }, []);
 
-            const handleUpdateUrl = (time, zone) => {
+            const handleUpdateUrl = (timesArray, zone) => {
                 const newUrl = new URL(window.location);
-                newUrl.searchParams.set('time', time);
+                newUrl.searchParams.delete('time');
+                newUrl.searchParams.set('times', timesArray.join(','));
                 newUrl.searchParams.set('zone', zone);
                 window.history.pushState({}, '', newUrl);
                 setUrlParams(newUrl.searchParams);
@@ -607,6 +751,8 @@
             const handleEdit = () => {
                 setIsEditing(true);
             };
+
+            const initialTimes = timesParam ? timesParam.split(',') : (timeParam ? [timeParam] : null);
 
             return (
                 <div className="min-h-screen p-4 md:p-8 flex flex-col items-center selection:bg-[#26282c] selection:text-white relative z-10">
@@ -621,10 +767,10 @@
                     </header>
 
                     <main className="w-full flex-1 flex flex-col">
-                        {!isEditing && timeParam && zoneParam ? (
-                            <GuestView time={timeParam} zone={zoneParam} onEdit={handleEdit} />
+                        {!isEditing && initialTimes && initialTimes.length > 0 && zoneParam ? (
+                            <GuestView times={initialTimes} zone={zoneParam} onEdit={handleEdit} />
                         ) : (
-                            <CreatorView initialTime={timeParam} initialZone={zoneParam} onGenerate={handleUpdateUrl} />
+                            <CreatorView initialTimes={initialTimes} initialZone={zoneParam} onGenerate={handleUpdateUrl} />
                         )}
                     </main>
                     
