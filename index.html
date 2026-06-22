@@ -394,6 +394,34 @@
                 }
             };
 
+            const handleMoveUp = (index) => {
+                if (index === 0) return;
+                const newSchedules = [...schedules];
+                const temp = newSchedules[index - 1];
+                newSchedules[index - 1] = newSchedules[index];
+                newSchedules[index] = temp;
+                setSchedules(newSchedules);
+            };
+
+            const handleMoveDown = (index) => {
+                if (index === schedules.length - 1) return;
+                const newSchedules = [...schedules];
+                const temp = newSchedules[index + 1];
+                newSchedules[index + 1] = newSchedules[index];
+                newSchedules[index] = temp;
+                setSchedules(newSchedules);
+            };
+
+            const handleSortByTime = () => {
+                const newSchedules = [...schedules].sort((a, b) => {
+                    const dtA = DateTime.fromISO(`${a.date}T${a.time}`);
+                    const dtB = DateTime.fromISO(`${b.date}T${b.time}`);
+                    if (!dtA.isValid || !dtB.isValid) return 0;
+                    return dtA.toMillis() - dtB.toMillis();
+                });
+                setSchedules(newSchedules);
+            };
+
             const updateSchedule = (id, field, value) => {
                 setSchedules(schedules.map(s => s.id === id ? { ...s, [field]: value } : s));
             };
@@ -431,12 +459,27 @@
                                 {schedules.map((s, index) => (
                                     <div key={s.id} className="relative bg-[#111214] p-4 rounded-xl border border-bordercolor">
                                         {schedules.length > 1 && (
-                                            <button type="button" onClick={() => handleRemoveSchedule(s.id)} 
-                                                className="absolute -top-2 -right-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 p-1.5 rounded-full border border-red-500/20 transition-colors" title={t.remove}>
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                            </button>
+                                            <div className="absolute -top-3 -right-2 flex items-center gap-1 z-10 bg-[#0a0a0a] p-1 rounded-full border border-bordercolor shadow-sm">
+                                                {index > 0 && (
+                                                    <button type="button" onClick={() => handleMoveUp(index)} 
+                                                        className="bg-[#1a1c20] hover:bg-[#26282c] text-textsec hover:text-white p-1 rounded-full transition-colors" title="Subir">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                                                    </button>
+                                                )}
+                                                {index < schedules.length - 1 && (
+                                                    <button type="button" onClick={() => handleMoveDown(index)} 
+                                                        className="bg-[#1a1c20] hover:bg-[#26282c] text-textsec hover:text-white p-1 rounded-full transition-colors" title="Bajar">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                                    </button>
+                                                )}
+                                                <div className="w-px h-3 bg-bordercolor mx-0.5"></div>
+                                                <button type="button" onClick={() => handleRemoveSchedule(s.id)} 
+                                                    className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-1 rounded-full transition-colors" title={t.remove}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                </button>
+                                            </div>
                                         )}
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-2 gap-4 mt-1">
                                             <div>
                                                 <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.date} {schedules.length > 1 ? index + 1 : ''}</label>
                                                 <input type="date" value={s.date} onChange={e => updateSchedule(s.id, 'date', e.target.value)} required 
@@ -452,9 +495,16 @@
                                 ))}
                             </div>
 
-                            <button type="button" onClick={handleAddSchedule} className="w-full border border-dashed border-[#383a40] hover:border-[#4a4d55] hover:bg-[#111214] text-textsec hover:text-textmain text-xs font-bold py-3 rounded-xl transition-all duration-200 cursor-pointer">
-                                {t.addSchedule}
-                            </button>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={handleAddSchedule} className="flex-1 border border-dashed border-[#383a40] hover:border-[#4a4d55] hover:bg-[#111214] text-textsec hover:text-textmain text-xs font-bold py-3 rounded-xl transition-all duration-200 cursor-pointer">
+                                    {t.addSchedule}
+                                </button>
+                                {schedules.length > 1 && (
+                                    <button type="button" onClick={handleSortByTime} className="bg-[#111214] border border-[#26282c] hover:border-[#383a40] text-textsec hover:text-white text-xs font-bold py-3 px-4 rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-1.5" title={isEs ? "Ordenar cronológicamente" : "Sort chronologically"}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5h10"/><path d="M11 9h7"/><path d="M11 13h4"/><path d="M3 17l3 3 3-3"/><path d="M6 18V4"/></svg>
+                                    </button>
+                                )}
+                            </div>
                             
                             <div className="pt-2">
                                 <label className="block text-[10px] font-bold text-textsec mb-2 uppercase tracking-widest">{t.yourTimezone}</label>
